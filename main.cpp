@@ -32,7 +32,7 @@ array<PieceName, 64> TEST_BOARD_1 = {
 int main() {
     Chessgame game(DEFAULT_BOARD);
 
-    int depth = 5;
+    int depth = 6;
     cout << "Running Perft at depth " << depth << "..." << endl;
 
     auto start_time = chrono::high_resolution_clock::now();

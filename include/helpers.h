@@ -28,6 +28,12 @@ enum PieceName {
     BLACK_KING
 };
 
+inline int get_piece_color(PieceName p) {
+    if (p >= WHITE_PAWN && p <= WHITE_KING) return WHITE;
+    if (p >= BLACK_PAWN && p <= BLACK_KING) return BLACK;
+    return -1; // EMPTY
+}
+
 inline char getPieceSymbol(PieceName p) {
     switch (p) {
         case WHITE_PAWN:     return 'p';
@@ -71,6 +77,22 @@ struct Move {
     int previous_en_passant_col = 0;
     bool captured_a_rook = false; // Capturing this move disabled queenside castling
     bool captured_h_rook = false; // Capturing this move disabled kingside castling
+};
+
+struct MoveList {
+    array<Move, 256> moves;
+    int count = 0;
+
+    void push(const Move& move) {
+        moves[count++] = move;
+    }
+
+    int size() const {
+        return count;
+    }
+
+    Move* begin() { return &moves[0]; }
+    Move* end() { return &moves[count]; }
 };
 
 inline void print_move(Move move) {
@@ -134,9 +156,6 @@ public:
     bool white_h_rook_moved;
     bool black_h_rook_moved;
 
-    vector<Square> white_pieces;
-    vector<Square> black_pieces;
-
     Square white_king_pos{0, 4};
     Square black_king_pos{7, 4};
 
@@ -172,15 +191,6 @@ public:
             int row = i / 8;
             int col = i % 8;
             Square current_sq{row, col};
-
-            if (piece >= WHITE_PAWN && piece <= WHITE_KING) {
-                white_pieces.push_back(current_sq);
-                if (piece == WHITE_KING) white_king_pos = current_sq;
-            } 
-            else if (piece >= BLACK_PAWN && piece <= BLACK_KING) {
-                black_pieces.push_back(current_sq);
-                if (piece == BLACK_KING) black_king_pos = current_sq;
-            }
         }
     }
 
