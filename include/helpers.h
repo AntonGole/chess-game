@@ -167,17 +167,27 @@ public:
         place_piece(to_square, piece);
     }
 
-    void display() {
-        for (int row = 7; row >= 0; row--) {
-            cout << row + 1 << " "; 
-
-            for (int col = 0; col < 8; col++) {
-                cout << "[" << getPieceSymbol(board[row * 8 + col]) << "]";
+    void display(int player_color = CHESS_WHITE) {
+            if (player_color == CHESS_WHITE) {
+                for (int row = 7; row >= 0; row--) {
+                    cout << row + 1 << " "; 
+                    for (int col = 0; col < 8; col++) {
+                        cout << "[" << getPieceSymbol(board[row * 8 + col]) << "]";
+                    }
+                    cout << endl;
+                }
+                cout << "   a  b  c  d  e  f  g  h" << endl;
+            } 
+            else {
+                for (int row = 0; row <= 7; row++) {
+                    cout << row + 1 << " "; 
+                    for (int col = 7; col >= 0; col--) {
+                        cout << "[" << getPieceSymbol(board[row * 8 + col]) << "]";
+                    }
+                    cout << endl;
+                }
+                cout << "   h  g  f  e  d  c  b  a" << endl;
             }
-            cout << endl;
-        }
-
-        cout << "   a  b  c  d  e  f  g  h" << endl;
     }
 };
 
