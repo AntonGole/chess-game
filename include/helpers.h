@@ -4,11 +4,14 @@
 #include <iostream>
 #include <array>
 #include <vector>
+#include <string>
 
 using namespace std;
 
-#define WHITE 0
-#define BLACK 1
+#define CHESS_WHITE 0
+#define CHESS_BLACK 1
+
+const float INF = 1000000.0f;
 
 enum PieceName {
     EMPTY, 
@@ -29,8 +32,8 @@ enum PieceName {
 };
 
 inline int get_piece_color(PieceName p) {
-    if (p >= WHITE_PAWN && p <= WHITE_KING) return WHITE;
-    if (p >= BLACK_PAWN && p <= BLACK_KING) return BLACK;
+    if (p >= WHITE_PAWN && p <= WHITE_KING) return CHESS_WHITE;
+    if (p >= BLACK_PAWN && p <= BLACK_KING) return CHESS_BLACK;
     return -1; // EMPTY
 }
 
@@ -77,7 +80,18 @@ struct Move {
     int previous_en_passant_col = 0;
     bool captured_a_rook = false; // Capturing this move disabled queenside castling
     bool captured_h_rook = false; // Capturing this move disabled kingside castling
+    
+    bool operator==(const Move& other) const {
+        return from == other.from && to == other.to;
+    }
 };
+
+inline Move translate_move(string& move) {
+    Square from{ (move[1] - '1'), (move[0] - 'a') };
+    Square to{ (move[3] - '1'), (move[2] - 'a') };
+
+    return Move{from, to};
+}
 
 struct MoveList {
     array<Move, 256> moves;
@@ -93,6 +107,35 @@ struct MoveList {
 
     Move* begin() { return &moves[0]; }
     Move* end() { return &moves[count]; }
+
+    bool contains(const Move& target) {
+        for (int i = 0; i < count; i++) {
+            if (moves[i] == target) return true;
+        }
+        return false;
+    }
+
+    Move find_match(const Move& user_move) {
+        for (int i = 0; i < count; i++) {
+            if (moves[i] == user_move) {
+                return moves[i];
+            }
+        }
+
+        return Move{}; 
+    }
+
+    // Get a list of square indexes (0-63) where a specific piece can go to
+    vector<int> get_possible_piece_moves(const Square& piece_square) const {
+        vector<int> possible_squares;
+
+        for (int i = 0; i < count; i++) {
+            if (moves[i].from == piece_square) {
+                possible_squares.push_back(moves[i].to.row * 8 + moves[i].to.col);
+            }
+        }
+        return possible_squares;
+    }
 };
 
 inline void print_move(Move move) {
@@ -163,7 +206,7 @@ public:
     int en_passant_col;
 
     Chessgame(array<PieceName, 64> starting_board) : board(starting_board) {
-        turn          = WHITE;
+        turn          = CHESS_WHITE;
 
         black_castled = false;
         white_castled = false;
@@ -195,7 +238,7 @@ public:
     }
 
     void swap_turn() {
-        turn = turn == WHITE ? BLACK : WHITE;
+        turn = turn == CHESS_WHITE ? CHESS_BLACK : CHESS_WHITE;
     }
 };
 
