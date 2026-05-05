@@ -7,6 +7,7 @@
 #include <string>
 #include <random>
 #include <cstdint>
+#include <array>
 
 #include "helpers.h"
 
@@ -151,15 +152,21 @@ public:
         return true;
     }
 
-    float evaluate(const vector<int>& active_features) {
-        
-        // Hidden layer
-        vector<float> hidden_layer_output(hidden_size, 0.0f);
+    float evaluate(const int* active_features, int active_count) {
+        static thread_local vector<float> hidden_layer_output;
+
+        if (hidden_layer_output.size() != hidden_size) {
+            hidden_layer_output.resize(hidden_size);
+        }
+
         for (size_t hidden_idx = 0; hidden_idx < hidden_size; hidden_idx++) {
             float sum = l1_biases[hidden_idx];
 
-            for (int active_idx : active_features) {
-                sum += l1_weights[(input_size * hidden_idx) + active_idx];
+            size_t weight_offset = input_size * hidden_idx;
+
+            for (int i = 0; i < active_count; i++) {
+                int active_idx = active_features[i];
+                sum += l1_weights[weight_offset + active_idx];
             }
 
             if (sum < 0.0f) sum = 0.0f;
@@ -168,16 +175,16 @@ public:
         }
 
         float final_score = l2_biases[0];
+
         for (size_t hidden_idx = 0; hidden_idx < hidden_size; hidden_idx++) {
-            final_score += (hidden_layer_output[hidden_idx] * l2_weights[hidden_idx]);
+            final_score += hidden_layer_output[hidden_idx] * l2_weights[hidden_idx];
         }
-        
-        return final_score * 100;
+
+        return final_score * 100.0f;
     }
 
-    vector<int> get_active_features(const Chessgame& game) {
-        vector<int> active_features;
-        active_features.reserve(36);
+    int get_active_features(const Chessgame& game, int* active_features) {
+        int active_count = 0;
 
         bool is_white_turn = (game.turn == CHESS_WHITE);
 
@@ -191,8 +198,8 @@ public:
             int fen_index;
 
             if (is_white_turn) {
-            // Invert the row, FEN strings start at A8
-            fen_index = ((7 - row) * 8) + col;
+                // Invert the row, FEN strings start at A8
+                fen_index = ((7 - row) * 8) + col;
             } else {
                 fen_index = (row * 8) + col;
             }
@@ -200,45 +207,66 @@ public:
             bool is_white_piece = (piece >= WHITE_PAWN && piece <= WHITE_KING);
             bool is_friendly = (is_white_turn == is_white_piece);
 
-            // Convert enum to same id usage as FEN
             int base_type = 0;
+
             switch (piece) {
-                case WHITE_PAWN:   case BLACK_PAWN:   base_type = 0; break;
-                case WHITE_KNIGHT: case BLACK_KNIGHT: base_type = 1; break;
-                case WHITE_BISHOP: case BLACK_BISHOP: base_type = 2; break;
-                case WHITE_ROOK:   case BLACK_ROOK:   base_type = 3; break;
-                case WHITE_QUEEN:  case BLACK_QUEEN:  base_type = 4; break;
-                case WHITE_KING:   case BLACK_KING:   base_type = 5; break;
-                default: continue; 
+                case WHITE_PAWN:
+                case BLACK_PAWN:
+                    base_type = 0;
+                    break;
+
+                case WHITE_KNIGHT:
+                case BLACK_KNIGHT:
+                    base_type = 1;
+                    break;
+
+                case WHITE_BISHOP:
+                case BLACK_BISHOP:
+                    base_type = 2;
+                    break;
+
+                case WHITE_ROOK:
+                case BLACK_ROOK:
+                    base_type = 3;
+                    break;
+
+                case WHITE_QUEEN:
+                case BLACK_QUEEN:
+                    base_type = 4;
+                    break;
+
+                case WHITE_KING:
+                case BLACK_KING:
+                    base_type = 5;
+                    break;
+
+                default:
+                    continue;
             }
 
-            // If friendly piece shift ID up by 6 (to 6-11)
-            int piece_id = is_friendly ? (base_type + 6) : base_type;
+            int piece_id = is_friendly ? base_type + 6 : base_type;
 
-            // Push calculated index
-            active_features.push_back((piece_id * 64) + fen_index);
+            active_features[active_count++] = (piece_id * 64) + fen_index;
         }
 
-        bool white_kingside = !game.white_king_moved && !game.white_h_rook_moved;
+        bool white_kingside  = !game.white_king_moved && !game.white_h_rook_moved;
         bool white_queenside = !game.white_king_moved && !game.white_a_rook_moved;
-        bool black_kingside = !game.black_king_moved && !game.black_h_rook_moved;
+        bool black_kingside  = !game.black_king_moved && !game.black_h_rook_moved;
         bool black_queenside = !game.black_king_moved && !game.black_a_rook_moved;
 
         if (is_white_turn) {
-            // White is friendly
-            if (white_kingside)  active_features.push_back(768);
-            if (white_queenside) active_features.push_back(769);
-            if (black_kingside)  active_features.push_back(770);
-            if (black_queenside) active_features.push_back(771);
+            if (white_kingside)  active_features[active_count++] = 768;
+            if (white_queenside) active_features[active_count++] = 769;
+            if (black_kingside)  active_features[active_count++] = 770;
+            if (black_queenside) active_features[active_count++] = 771;
         } else {
-            // Black is friendly (Indeces 768/769 belong to active player)
-            if (black_kingside)  active_features.push_back(768);
-            if (black_queenside) active_features.push_back(769);
-            if (white_kingside)  active_features.push_back(770);
-            if (white_queenside) active_features.push_back(771);
+            if (black_kingside)  active_features[active_count++] = 768;
+            if (black_queenside) active_features[active_count++] = 769;
+            if (white_kingside)  active_features[active_count++] = 770;
+            if (white_queenside) active_features[active_count++] = 771;
         }
 
-        return active_features;
+        return active_count;
     }
 };
 

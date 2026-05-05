@@ -19,70 +19,84 @@ void get_psuedo_moves(Chessgame& game, MoveList& moves, bool generate_castling) 
 }
 
 void get_legal_moves_white(Chessgame& game, MoveList& legal_moves, bool generate_castling) {
-    for (int r = 0; r < 8; r++) {
-        for (int c = 0; c < 8; c++) {
-            Square sq{r, c};
-            PieceName piece = game.board.get_piece(sq);
+    const auto& board = game.board.board;
 
-            if (piece == EMPTY || get_piece_color(piece) != CHESS_WHITE) continue;
+    for (int i = 0; i < 64; i++) {
+        PieceName piece = board[i];
 
-            switch (piece) {
-                case WHITE_PAWN: 
-                    get_legal_moves_white_pawn(game, sq, legal_moves);
-                    break;
-                case WHITE_KNIGHT: 
-                    get_legal_moves_white_knight(game, sq, legal_moves);
-                    break;
-                case WHITE_BISHOP: 
-                    get_legal_moves_white_bishop(game, sq, legal_moves);
-                    break;
-                case WHITE_ROOK: 
-                    get_legal_moves_white_rook(game, sq, legal_moves);
-                    break;
-                case WHITE_QUEEN: 
-                    get_legal_moves_white_queen(game, sq, legal_moves);
-                    break;
-                case WHITE_KING: 
-                    get_legal_moves_white_king(game, sq, legal_moves, generate_castling);
-                    break;
-                default:
-                    break;
-            }
+        if (piece < WHITE_PAWN || piece > WHITE_KING) continue;
+
+        Square sq{i / 8, i % 8};
+
+        switch (piece) {
+            case WHITE_PAWN:
+                get_legal_moves_white_pawn(game, sq, legal_moves);
+                break;
+
+            case WHITE_KNIGHT:
+                get_legal_moves_white_knight(game, sq, legal_moves);
+                break;
+
+            case WHITE_BISHOP:
+                get_legal_moves_white_bishop(game, sq, legal_moves);
+                break;
+
+            case WHITE_ROOK:
+                get_legal_moves_white_rook(game, sq, legal_moves);
+                break;
+
+            case WHITE_QUEEN:
+                get_legal_moves_white_queen(game, sq, legal_moves);
+                break;
+
+            case WHITE_KING:
+                get_legal_moves_white_king(game, sq, legal_moves, generate_castling);
+                break;
+
+            default:
+                break;
         }
-
     }
 }
 
-void get_legal_moves_black(Chessgame& game,  MoveList& legal_moves, bool generate_castling) {
-    for (int r = 0; r < 8; r++) {
-        for (int c = 0; c < 8; c++) {
-            Square sq{r, c};
-            PieceName piece = game.board.get_piece(sq);
+void get_legal_moves_black(Chessgame& game, MoveList& legal_moves, bool generate_castling) {
+    const auto& board = game.board.board;
 
-            if (piece == EMPTY || get_piece_color(piece) != CHESS_BLACK) continue;
+    for (int i = 0; i < 64; i++) {
+        PieceName piece = board[i];
 
-            switch (game.board.get_piece(sq)) {
-                case BLACK_PAWN: 
-                    get_legal_moves_black_pawn(game, sq, legal_moves);
-                    break;
-                case BLACK_KNIGHT: 
-                    get_legal_moves_black_knight(game, sq, legal_moves);
-                    break;
-                case BLACK_BISHOP: 
-                    get_legal_moves_black_bishop(game, sq, legal_moves);
-                    break;
-                case BLACK_ROOK: 
-                    get_legal_moves_black_rook(game, sq, legal_moves);
-                    break;
-                case BLACK_QUEEN: 
-                    get_legal_moves_black_queen(game, sq, legal_moves);
-                    break;
-                case BLACK_KING: 
-                    get_legal_moves_black_king(game, sq, legal_moves, generate_castling);
-                    break;
-                default:
-                    break;
-            }
+        // Black pieces are BLACK_PAWN through BLACK_KING.
+        if (piece < BLACK_PAWN || piece > BLACK_KING) continue;
+
+        Square sq{i / 8, i % 8};
+
+        switch (piece) {
+            case BLACK_PAWN:
+                get_legal_moves_black_pawn(game, sq, legal_moves);
+                break;
+
+            case BLACK_KNIGHT:
+                get_legal_moves_black_knight(game, sq, legal_moves);
+                break;
+
+            case BLACK_BISHOP:
+                get_legal_moves_black_bishop(game, sq, legal_moves);
+                break;
+
+            case BLACK_ROOK:
+                get_legal_moves_black_rook(game, sq, legal_moves);
+                break;
+
+            case BLACK_QUEEN:
+                get_legal_moves_black_queen(game, sq, legal_moves);
+                break;
+
+            case BLACK_KING:
+                get_legal_moves_black_king(game, sq, legal_moves, generate_castling);
+                break;
+
+            default:
+                break;
         }
     }
 }
@@ -194,23 +208,33 @@ void get_king_moves(Chessgame& game, Square square, MoveList& legal_moves,
                     int own_color, bool generate_castling) {
     auto on_board = [](int f, int r) { return f >= 0 && f < 8 && r >= 0 && r < 8; };
 
-    int f_offset[] = {1, 1, 1, 0, 0, -1, -1, -1};
-    int r_offset[] = {-1, 0, 1, -1, 1, -1, 0, 1};
+    static constexpr int dr[8] = { 1, 1, 1, 0, 0, -1, -1, -1 };
+    static constexpr int dc[8] = {-1, 0, 1,-1, 1, -1,  0,  1 };
+
+    const auto& board = game.board.board;
     
     for (size_t i = 0; i < 8; i++) {
-        int target_row = square.row + f_offset[i];
-        int target_col = square.col + r_offset[i];
+        int target_row = square.row + dr[i];
+        int target_col = square.col + dc[i];
 
         if (!on_board(target_row, target_col)) continue;
 
-        Square target{target_row, target_col};
+        PieceName target_piece = board[target_row * 8 + target_col];
 
-        if (get_piece_color(game.board.get_piece(target)) != own_color) {
-            legal_moves.push({square, target});
+        bool target_is_own_piece;
+
+        if (own_color == CHESS_WHITE) {
+            target_is_own_piece = target_piece >= WHITE_PAWN && target_piece <= WHITE_KING;
+        } else {
+            target_is_own_piece = target_piece >= BLACK_PAWN && target_piece <= BLACK_KING;
+        }
+
+        if (!target_is_own_piece) {
+            legal_moves.push({square, Square{target_row, target_col}});
         }
     }
 
-    bool own_king_moved = game.turn == CHESS_WHITE ? game.white_king_moved : game.black_king_moved;
+    bool own_king_moved = own_color == CHESS_WHITE ? game.white_king_moved : game.black_king_moved;
 
     if (generate_castling && !own_king_moved) {
         int own_row = (own_color == CHESS_WHITE) ? 0 : 7;
@@ -264,19 +288,29 @@ void get_legal_moves_black_king(Chessgame& game, Square square, MoveList& legal_
 void get_knight_moves(Chessgame& game, Square square, MoveList& legal_moves, int own_color) {
     auto on_board = [](int f, int r) { return f >= 0 && f < 8 && r >= 0 && r < 8; };
 
-    int f_offset[] = {2, 2, 1, 1, -1, -1, -2, -2};
-    int r_offset[] = {1, -1, 2, -2, 2, -2, 1, -1};
+    static constexpr int dr[8] = { 2,  2,  1,  1, -1, -1, -2, -2 };
+    static constexpr int dc[8] = { 1, -1,  2, -2,  2, -2,  1, -1 };
+
+    const auto& board = game.board.board;
     
     for (size_t i = 0; i < 8; i++) {
-        int target_row = square.row + f_offset[i];
-        int target_col = square.col + r_offset[i];
+        int target_row = square.row + dr[i];
+        int target_col = square.col + dc[i];
 
         if (!on_board(target_row, target_col)) continue;
 
-        Square target{target_row, target_col};
+        PieceName target_piece = board[target_row * 8 + target_col];
 
-        if (get_piece_color(game.board.get_piece(target)) != own_color) {
-            legal_moves.push({square, target});
+        bool target_is_own_piece;
+
+        if (own_color == CHESS_WHITE) {
+            target_is_own_piece = target_piece >= WHITE_PAWN && target_piece <= WHITE_KING;
+        } else {
+            target_is_own_piece = target_piece >= BLACK_PAWN && target_piece <= BLACK_KING;
+        }
+
+        if (!target_is_own_piece) {
+            legal_moves.push({square, Square{target_row, target_col}});
         }
     }
 }
@@ -693,11 +727,21 @@ inline int score_move_guess(Chessgame& game, const Move& move, const Move& tt_mo
     }
     int guess_score = 0;
 
+    PieceName captured = move.captured_piece;
+
+    if (captured == EMPTY && !move.en_passant) {
+        captured = game.board.get_piece(move.to);
+    }
+
+    if (move.en_passant) {
+        captured = (game.turn == CHESS_WHITE) ? BLACK_PAWN : WHITE_PAWN;
+    }
+
     // Captures (MVV-LVA logic)
-    if (move.captured_piece != EMPTY) {
+    if (captured != EMPTY) {
         PieceName attacker = game.board.get_piece(move.from);
         
-        guess_score = (10 * get_piece_value(move.captured_piece)) - get_piece_value(attacker);
+        guess_score = (10 * get_piece_value(captured)) - get_piece_value(attacker);
     }
 
     if (move.promotion != EMPTY) {
@@ -714,8 +758,9 @@ inline int score_move_guess(Chessgame& game, const Move& move) {
 
 float quiescence(Chessgame& game, float alpha, float beta, NNUE& evaluator) {
     // What is the score if we do nothing?
-    vector<int> active_features = evaluator.get_active_features(game);
-    float stand_pat = evaluator.evaluate(active_features);
+    int active_features[40];
+    int active_count = evaluator.get_active_features(game, active_features);
+    float stand_pat = evaluator.evaluate(active_features, active_count);
 
     // If doing nothing is so good that the opponent wouldn't allow it then stop
     if (stand_pat >= beta) {
@@ -729,7 +774,7 @@ float quiescence(Chessgame& game, float alpha, float beta, NNUE& evaluator) {
 
     MoveList pseudo_moves;
     get_psuedo_moves(game, pseudo_moves, true);
-    filter_legal_moves(game, pseudo_moves);
+    //filter_legal_moves(game, pseudo_moves);
 
     std::sort(pseudo_moves.begin(), pseudo_moves.end(), [&](const Move& a, const Move& b) {
         return score_move_guess(game, a) > score_move_guess(game, b);
@@ -737,12 +782,16 @@ float quiescence(Chessgame& game, float alpha, float beta, NNUE& evaluator) {
 
     for (Move& move : pseudo_moves) {
         
-        // Skip quiet moves
-        if (move.captured_piece == EMPTY && !move.en_passant) {
-            continue; 
-        }
+        PieceName target_on_board = game.board.get_piece(move.to);
+        if (target_on_board == EMPTY && !move.en_passant) continue;
 
         make_move(game, move);
+
+        Square king_square = game.turn == CHESS_WHITE ? game.black_king_pos : game.white_king_pos;
+        if (is_square_attacked(game, king_square, 1 - game.turn)) {
+            unmake_move(game, move);
+            continue;
+        }
         
         // Same math as Alpha-Beta
         float score = -quiescence(game, -beta, -alpha, evaluator);
@@ -790,26 +839,29 @@ float alpha_beta(Chessgame& game, int depth, float alpha, float beta, NNUE& eval
     }
     
     MoveList pseudo_moves;
-    get_psuedo_moves(game, pseudo_moves);
-    filter_legal_moves(game, pseudo_moves);
+    get_psuedo_moves(game, pseudo_moves, true);
+    //filter_legal_moves(game, pseudo_moves);
 
     std::sort(pseudo_moves.begin(), pseudo_moves.end(), [&](const Move& a, const Move& b) {
         return score_move_guess(game, a, tt_move) > score_move_guess(game, b, tt_move);
     });
-    
-    // If no legal moves, either checkmate or stalemate
-    if (pseudo_moves.size() == 0) {
-        Square my_king_square = game.turn == CHESS_WHITE ? game.white_king_pos : game.black_king_pos;
-        if (is_square_attacked(game, my_king_square, game.turn)) return -INF + depth;
-        else return 0.0F;
-    }
 
     // Assume worst outcome
     float best_score = -INF;
     Move best_move_found;
+    int legal_move_count = 0;
 
     for (Move& move : pseudo_moves) {
         make_move(game, move);
+
+        Square king_square = game.turn == CHESS_WHITE ? game.black_king_pos : game.white_king_pos;
+        if (is_square_attacked(game, king_square, 1 - game.turn)) {
+            unmake_move(game, move);
+            continue; // Skip move if king is not safe after making move
+        }
+
+        legal_move_count++;
+        
         // Negate new score from recursive call (scored from enemy perspective)
         float new_score = -alpha_beta(game, depth - 1, -beta, -alpha, evaluator);
         unmake_move(game, move);
@@ -828,6 +880,13 @@ float alpha_beta(Chessgame& game, int depth, float alpha, float beta, NNUE& eval
         if (alpha >= beta) {
             break;
         }
+    }
+
+    // If no legal moves, either checkmate or stalemate
+    if (legal_move_count == 0) {
+        Square my_king_square = game.turn == CHESS_WHITE ? game.white_king_pos : game.black_king_pos;
+        if (is_square_attacked(game, my_king_square, game.turn)) return -INF + depth;
+        else return 0.0F;
     }
 
     HashFlag flag = HASH_EXACT;
