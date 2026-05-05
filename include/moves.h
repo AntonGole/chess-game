@@ -5,10 +5,62 @@
 #include <vector>
 #include <fstream>
 #include <string>
+#include <random>
+#include <cstdint>
 
 #include "helpers.h"
 
 using namespace std;
+
+// Zobrist hashing for generating unique ID for chess positions
+
+enum HashFlag { HASH_EXACT, HASH_ALPHA, HASH_BETA };
+
+struct TTEntry {
+    uint64_t key;
+    int depth;
+    float score;
+    HashFlag flag;
+    Move best_move;
+};
+
+// A table of random numbers: [12 piece types][64 squares]
+extern uint64_t zobrist_pieces[12][64];
+extern uint64_t zobrist_black_turn;
+
+extern const int TT_SIZE;
+extern std::vector<TTEntry> transposition_table;
+
+inline void init_zobrist() {
+    std::mt19937_64 rng(12345);
+    
+    for (int p = 0; p < 12; p++) {
+        for (int s = 0; s < 64; s++) {
+            zobrist_pieces[p][s] = rng();
+        }
+    }
+    zobrist_black_turn = rng();
+}
+
+// Function to calculate hash of a board
+inline uint64_t compute_hash(Chessgame& game) {
+    uint64_t hash = 0;
+    
+    for (int i = 0; i < 64; i++) {
+        PieceName piece = game.board.board[i];
+        if (piece != EMPTY) {
+            // map PieceNames to array index
+            int piece_index = piece - 1; 
+            hash ^= zobrist_pieces[piece_index][i]; // XOR piece into hash
+        }
+    }
+    
+    if (game.turn == CHESS_BLACK) {
+        hash ^= zobrist_black_turn;
+    }
+    
+    return hash;
+}
 
 void get_psuedo_moves(Chessgame& game, MoveList& moves, bool generate_castling = true);
 
@@ -189,6 +241,8 @@ public:
         return active_features;
     }
 };
+
+float quiescence(Chessgame& game, float alpha, float beta, NNUE& evaluator);
 
 float alpha_beta(Chessgame& game, int depth, float alpha, float beta, NNUE& evaluator);
 

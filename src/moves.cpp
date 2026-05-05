@@ -7,6 +7,12 @@
 
 using namespace std;
 
+uint64_t zobrist_pieces[12][64];
+uint64_t zobrist_black_turn;
+
+const int TT_SIZE = 1000000;
+std::vector<TTEntry> transposition_table(TT_SIZE);
+
 void get_psuedo_moves(Chessgame& game, MoveList& moves, bool generate_castling) {
     if (game.turn == CHESS_WHITE) get_legal_moves_white(game, moves, generate_castling);
     else get_legal_moves_black(game, moves, generate_castling);
@@ -680,7 +686,11 @@ inline int get_piece_value(PieceName piece) {
     }
 }
 
-inline int score_move_guess(Chessgame& game, const Move& move) {
+inline int score_move_guess(Chessgame& game, const Move& move, const Move& tt_move) {
+    // If move is same move we got from Transposition Table, give it high score to be put first 
+    if (move.from == tt_move.from && move.to == tt_move.to) {
+        return 100000; 
+    }
     int guess_score = 0;
 
     // Captures (MVV-LVA logic)
@@ -697,11 +707,86 @@ inline int score_move_guess(Chessgame& game, const Move& move) {
     return guess_score;
 }
 
+inline int score_move_guess(Chessgame& game, const Move& move) {
+    Move blank_move = {{-1, -1}, {-1, -1}}; // A move that can never happen
+    return score_move_guess(game, move, blank_move);
+}
+
+float quiescence(Chessgame& game, float alpha, float beta, NNUE& evaluator) {
+    // What is the score if we do nothing?
+    vector<int> active_features = evaluator.get_active_features(game);
+    float stand_pat = evaluator.evaluate(active_features);
+
+    // If doing nothing is so good that the opponent wouldn't allow it then stop
+    if (stand_pat >= beta) {
+        return beta;
+    }
+    
+    // Update floor if doing nothing is our best option so far
+    if (stand_pat > alpha) {
+        alpha = stand_pat;
+    }
+
+    MoveList pseudo_moves;
+    get_psuedo_moves(game, pseudo_moves, true);
+    filter_legal_moves(game, pseudo_moves);
+
+    std::sort(pseudo_moves.begin(), pseudo_moves.end(), [&](const Move& a, const Move& b) {
+        return score_move_guess(game, a) > score_move_guess(game, b);
+    });
+
+    for (Move& move : pseudo_moves) {
+        
+        // Skip quiet moves
+        if (move.captured_piece == EMPTY && !move.en_passant) {
+            continue; 
+        }
+
+        make_move(game, move);
+        
+        // Same math as Alpha-Beta
+        float score = -quiescence(game, -beta, -alpha, evaluator);
+        
+        unmake_move(game, move);
+
+        // Standard Alpha-Beta pruning
+        if (score >= beta) {
+            return beta;
+        }
+        if (score > alpha) {
+            alpha = score;
+        }
+    }
+
+    return alpha;
+}
+
 float alpha_beta(Chessgame& game, int depth, float alpha, float beta, NNUE& evaluator) {
+    // Generate hash
+    uint64_t hash = compute_hash(game);
+    int tt_index = hash % TT_SIZE;
+    
+    // See if position has been found before
+    TTEntry& tt_entry = transposition_table[tt_index];
+    Move tt_move = {{-1, -1}, {-1, -1}}; // Blank fallback move
+
+    if (tt_entry.key == hash) {
+        tt_move = tt_entry.best_move; // Grab the saved move!
+        
+        // Use saved score if position has been evaluated at deep enough depth
+        if (tt_entry.depth >= depth) {
+            if (tt_entry.flag == HASH_EXACT) return tt_entry.score;
+            if (tt_entry.flag == HASH_ALPHA && tt_entry.score <= alpha) return alpha;
+            if (tt_entry.flag == HASH_BETA && tt_entry.score >= beta) return beta;
+        }
+    }
+
+    float original_alpha = alpha;
     
     if (depth == 0) {
-        vector<int> active_features = evaluator.get_active_features(game);
-        return evaluator.evaluate(active_features);
+        return quiescence(game, alpha, beta, evaluator);
+        //vector<int> active_features = evaluator.get_active_features(game);
+        //return evaluator.evaluate(active_features);
     }
     
     MoveList pseudo_moves;
@@ -709,7 +794,7 @@ float alpha_beta(Chessgame& game, int depth, float alpha, float beta, NNUE& eval
     filter_legal_moves(game, pseudo_moves);
 
     std::sort(pseudo_moves.begin(), pseudo_moves.end(), [&](const Move& a, const Move& b) {
-        return score_move_guess(game, a) > score_move_guess(game, b);
+        return score_move_guess(game, a, tt_move) > score_move_guess(game, b, tt_move);
     });
     
     // If no legal moves, either checkmate or stalemate
@@ -721,6 +806,7 @@ float alpha_beta(Chessgame& game, int depth, float alpha, float beta, NNUE& eval
 
     // Assume worst outcome
     float best_score = -INF;
+    Move best_move_found;
 
     for (Move& move : pseudo_moves) {
         make_move(game, move);
@@ -728,7 +814,10 @@ float alpha_beta(Chessgame& game, int depth, float alpha, float beta, NNUE& eval
         float new_score = -alpha_beta(game, depth - 1, -beta, -alpha, evaluator);
         unmake_move(game, move);
 
-        best_score = new_score > best_score ? new_score : best_score;
+        if (new_score > best_score) {
+            best_score = new_score;
+            best_move_found = move;
+        }
 
         // Update alpha (floor)
         if (best_score > alpha) {
@@ -740,6 +829,17 @@ float alpha_beta(Chessgame& game, int depth, float alpha, float beta, NNUE& eval
             break;
         }
     }
+
+    HashFlag flag = HASH_EXACT;
+    if (best_score <= original_alpha) flag = HASH_ALPHA; // We failed low (not good enough)
+    else if (best_score >= beta) flag = HASH_BETA;       // We failed high (opponent prunes)
+
+    tt_entry.key = hash;
+    tt_entry.depth = depth;
+    tt_entry.score = best_score;
+    tt_entry.flag = flag;
+    tt_entry.best_move = best_move_found;
+
     return best_score;
 }
 

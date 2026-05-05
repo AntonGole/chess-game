@@ -23,6 +23,8 @@ array<PieceName, 64> DEFAULT_BOARD = {
     };
 
 int run_terminal(int player_color) {
+    init_zobrist();
+
     NNUE chess_evaluator(772, 1024);
 
     if (!chess_evaluator.load_weights("../../machine_learning/nnue_weights1024_huber_perspective.bin")) {
@@ -78,6 +80,8 @@ int run_terminal(int player_color) {
 }
 
 void run_gui(int player_color) {
+    init_zobrist();
+
     bool play_against_ai = true; 
     
     NNUE chess_evaluator(772, 1024);
